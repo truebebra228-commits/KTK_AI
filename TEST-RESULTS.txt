@@ -1,0 +1,60 @@
+IMPULSE / ИМПУЛЬС - Пепельный город v1.5.0
+Verified 2026-11-05 with Godot 4.7.2 stable, Windows x64.
+
+Integration: 120 passed, 0 failed.
+UI input: 48 passed, 0 failed.
+Art resources: 14 passed, 0 failed.
+Arms and gaze: 22 passed, 0 failed.
+Total: 204 checks passed, 0 failed.
+Final Build.ps1 run completed without warnings/errors and exported Windows v1.5.0.
+
+Gameplay and physics:
+- All four challenge rooms are physically traversable from spawn to exit:
+  54 px steps, 260 px ledge, 500 px gap and a 790 px airborne bomb chain.
+- Held preview has no bomb physics and cannot detonate. Release creates a
+  physical bomb that falls, rebounds from the floor and settles on a platform.
+- Dragging another preview cannot teleport a released bomb. Existing bombs
+  can detonate while a new preview remains held.
+- Placement stays within 60 px. Terrain and occluded cursor positions resolve
+  to nearby reachable free space; release creates a bomb at the corrected point.
+  Only a neighborhood with no accessible point cancels without spending a charge.
+  Charge limits, refills, radial blasts and pause pass.
+- All five rooms fit one fixed screen. Transitions fade, replace colliders
+  without accumulating old bodies, clear bomb states and resume play.
+- Fifth room remains freely playable with confetti and unlimited reserve;
+  three-active-bomb cap remains. Pause freezes confetti and bomb physics.
+- R repeats a challenge; R in the final room starts a fresh run in room one,
+  clearing bombs, preview, run statistics and transition state.
+
+Arms and eyes:
+- Short pixel arms grip opposite sides of the bomb in the same cursor update,
+  without a delayed frame. Hands remain stable while elbow motion stays small.
+- Eyes immediately follow the held bomb's direction. Release returns both hands
+  and gaze to neutral while the released bomb falls independently.
+- Hands and elbows stay finite within a short reach in all target directions.
+- Pause freezes joints, gaze and animation clock; gaze relaxes after resuming.
+  Teleport, respawn, R, room loading and final replay reset arms and eyes.
+- Existing jump and bomb traversal routes still pass after arm integration.
+
+Performance probe (same scene, VSync off, NVIDIA RTX 3050):
+- CPU draw time: 3.780 ms before, 0.390 ms after, approximately 89.7% lower.
+- Draw calls: approximately 952 before, 193 after.
+These are local measurements, not a guaranteed frame rate on other devices.
+
+Release verification:
+- Windows v1.5.0 starts directly in gameplay through OpenGL Compatibility;
+  startup smoke exits with code 0 and no script/resource errors.
+- Browser QA verified current export/source SHA agreement, compressed loading,
+  visible 1280x720 canvas, 60 px reach, instant pixel arms, directional gaze,
+  automatic correction above terrain, release/fall and F detonation.
+  Browser console and network checks reported no errors.
+
+GitHub distribution:
+- Browser bundle is approximately 12.53 MB before editable source is added.
+- Largest browser file is index.wasm.gz, approximately 10.055 MB.
+- GitHub package includes editable project/ sources and keeps each file below
+  25 MB. The approximately 111 MB Windows executable is distributed separately.
+- Browser package README documents GitHub Pages deployment.
+
+Tests back up and restore user settings. Reproduce using Build.ps1 and
+the individual test commands in README.md.

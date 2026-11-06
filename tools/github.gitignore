@@ -1,0 +1,14 @@
+# Source imports, local builds and large native engine files stay out of GitHub.
+.godot/
+**/.godot/
+dist/
+**/dist/
+*.exe
+*.pdb
+*.wasm
+*.tpz
+*.zip
+*.log
+__pycache__/
+.DS_Store
+Thumbs.db
