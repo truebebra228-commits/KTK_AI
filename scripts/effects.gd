@@ -1,7 +1,6 @@
 extends Node2D
 
 var sparks: Array[Dictionary] = []
-var rings: Array[Dictionary] = []
 var ghosts: Array[Dictionary] = []
 var smoke: Array[Dictionary] = []
 
@@ -10,7 +9,6 @@ func burst(at: Vector2, color: Color, amount: int = 30, power: float = 400.0) ->
 		var angle: float = randf() * TAU
 		var life: float = randf_range(0.25, 0.7)
 		sparks.append({"p": at, "v": Vector2.from_angle(angle) * randf_range(power * 0.2, power), "life": life, "max": life, "c": color})
-	rings.append({"p": at, "age": 0.0, "c": color, "size": power * 0.42})
 	if color.r > color.g * 1.2:
 		for i: int in range(10):
 			var life: float = randf_range(0.5, 1.1)
@@ -32,10 +30,6 @@ func _process(delta: float) -> void:
 		s.v.y += delta * 500.0
 		if s.life <= 0.0:
 			sparks.remove_at(i)
-	for i: int in range(rings.size() - 1, -1, -1):
-		rings[i].age += delta
-		if rings[i].age > 0.55:
-			rings.remove_at(i)
 	for i: int in range(ghosts.size() - 1, -1, -1):
 		ghosts[i].life -= delta
 		if ghosts[i].life <= 0:
@@ -45,16 +39,14 @@ func _process(delta: float) -> void:
 func _draw() -> void:
 	for puff: Dictionary in smoke:
 		var ratio: float = float(puff.life) / float(puff.max)
-		draw_circle(puff.p, float(puff.r) * (1.4 - ratio * 0.5), Color(0.12, 0.09, 0.14, ratio * 0.3))
+		var size: float = float(puff.r) * (1.4 - ratio * 0.5)
+		var at: Vector2 = (puff.p as Vector2).snapped(Vector2(2, 2))
+		var ink: Color = Color(0.12, 0.09, 0.14, ratio * 0.16)
+		draw_rect(Rect2(at - Vector2(size, size * 0.5), Vector2(size * 2.0, size)), ink)
+		draw_rect(Rect2(at - Vector2(size * 0.5, size), Vector2(size, size * 2.0)), ink)
 	for ghost: Dictionary in ghosts:
-		draw_circle(ghost.p, 6.0 * float(ghost.life) / 0.24, Color(0.74, 0.58, 0.32, float(ghost.life) * 0.7))
-	for ring: Dictionary in rings:
-		var t: float = float(ring.age) / 0.55
-		var c: Color = ring.c
-		c.a = (1.0 - t) * 0.7
-		draw_arc(ring.p, 10.0 + (1.0 - pow(1.0 - t, 3.0)) * float(ring.size), 0, TAU, 60, c, 3.0 * (1.0 - t) + 1.0, true)
-		c.a *= 0.12
-		draw_circle(ring.p, float(ring.size) * t, c)
+		var size: float = 6.0 * float(ghost.life) / 0.24
+		draw_rect(Rect2(ghost.p - Vector2(size, size * 0.25), Vector2(size * 2.0, maxf(1.0, size * 0.5))), Color(0.74, 0.58, 0.32, float(ghost.life) * 0.7))
 	for spark: Dictionary in sparks:
 		var c: Color = spark.c
 		c.a = float(spark.life) / float(spark.max)

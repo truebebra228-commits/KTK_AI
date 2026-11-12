@@ -88,8 +88,9 @@ def main() -> None:
         (output / ".nojekyll").write_text("", encoding="utf-8")
         source_hashes = {
             file.relative_to(stage_project).as_posix(): sha256(file.read_bytes())
-            for folder in ("scripts", "scenes")
-            for file in sorted((stage_project / folder).rglob("*")) if file.is_file()
+            for folder in ("scripts", "scenes", "assets")
+            for file in sorted((stage_project / folder).rglob("*"))
+            if file.is_file() and file.suffix != ".import"
         }
         manifest = {
             "engine": "Godot 4.7.2 / web_nothreads_release",

@@ -108,6 +108,26 @@ fs.mkdirSync(output, { recursive: true });
   await call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'f', code: 'KeyF', windowsVirtualKeyCode: 70 });
   await delay(180);
   await screenshot('04-detonation');
+  await delay(160);
+  await screenshot('04b-detonation-late-no-rings');
+  await delay(1000);
+  // A real R restart and a stationary Space jump cover the other two burst
+  // triggers. Sample two phases of each to reveal any expanding outline.
+  await call('Input.dispatchKeyEvent', { type: 'keyDown', key: 'r', code: 'KeyR', windowsVirtualKeyCode: 82 });
+  await delay(25);
+  await call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'r', code: 'KeyR', windowsVirtualKeyCode: 82 });
+  await delay(45);
+  await screenshot('05-respawn-early-no-rings');
+  await delay(150);
+  await screenshot('05b-respawn-late-no-rings');
+  await delay(650);
+  await call('Input.dispatchKeyEvent', { type: 'keyDown', key: ' ', code: 'Space', windowsVirtualKeyCode: 32 });
+  await delay(20);
+  await call('Input.dispatchKeyEvent', { type: 'keyUp', key: ' ', code: 'Space', windowsVirtualKeyCode: 32 });
+  await delay(590);
+  await screenshot('06-landing-early-no-rings');
+  await delay(150);
+  await screenshot('06b-landing-late-no-rings');
   const final = await evaluate(`({gzip:window.IMPULSE_COMPACT_WEB||null,canvas:(()=>{const c=document.querySelector('canvas');return c?{width:c.width,height:c.height}:null})(),notice:document.querySelector('#status-notice')?.textContent||'',statusDisplay:document.querySelector('#status')?(document.querySelector('#status').style.display||'visible'):'none',userAgent:navigator.userAgent})`);
   const report = { url, final, errors, networkFailures, requests, messages };
   fs.writeFileSync(path.join(output, 'report.json'), JSON.stringify(report, null, 2));

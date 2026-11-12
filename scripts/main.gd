@@ -75,11 +75,7 @@ func _ready() -> void:
 	add_child(camera)
 	sound = SoundScript.new()
 	add_child(sound)
-	var source: Texture2D = load("res://assets/bomb-cutout.png") as Texture2D
-	var atlas: AtlasTexture = AtlasTexture.new()
-	atlas.atlas = source
-	atlas.region = Rect2(source.get_image().get_used_rect())
-	preview_texture = atlas
+	preview_texture = BombScript.visual_texture()
 	_placement_query = PhysicsShapeQueryParameters2D.new()
 	var placement_shape: CircleShape2D = CircleShape2D.new()
 	placement_shape.radius = BOMB_RADIUS
@@ -242,7 +238,6 @@ func load_room(index: int) -> void:
 	camera.offset = Vector2.ZERO
 	camera.reset_smoothing()
 	effects.sparks.clear()
-	effects.rings.clear()
 	effects.ghosts.clear()
 	effects.smoke.clear()
 	effects.queue_redraw()
@@ -402,16 +397,9 @@ func _draw_placement() -> void:
 	if not placing_bomb:
 		return
 	var ink: Color = Color("c5d19a") if placement_valid else Color("e18b79")
-	for segment: int in range(40):
-		var angle: float = float(segment) * TAU / 40.0
-		placement_preview.draw_arc(player.position, PLACEMENT_RADIUS, angle, angle + 0.07, 4, Color(ink, 0.3), 1.0, true)
 	placement_preview.draw_line(player.position, placement_position, Color(ink, 0.4), 1.0, true)
-	placement_preview.draw_circle(placement_position, 14, Color(ink, 0.12))
-	placement_preview.draw_arc(placement_position, 13, 0.0, TAU, 32, Color(ink, 0.85), 1.0, true)
 	if preview_texture != null:
-		var height: float = 43.0
-		var width: float = height * preview_texture.get_width() / float(preview_texture.get_height())
-		placement_preview.draw_texture_rect(preview_texture, Rect2(placement_position + Vector2(-width / 2.0, 10.0 - height), Vector2(width, height)), false, Color(1, 1, 1, 0.55))
+		BombScript.draw_visual(placement_preview, preview_texture, placement_position, elapsed, 0.0, 0.55)
 	if not placement_valid:
 		placement_preview.draw_line(placement_position - Vector2(5, 5), placement_position + Vector2(5, 5), ink, 2.0)
 		placement_preview.draw_line(placement_position + Vector2(5, -5), placement_position + Vector2(-5, 5), ink, 2.0)
