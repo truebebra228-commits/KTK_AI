@@ -1,83 +1,99 @@
-IMPULSE / ИМПУЛЬС - Пепельный город v1.5.4
-Verified 2026-11-12 with Godot 4.7.2 stable, Windows x64.
+Bomb the way v1.7.4
+Verified with Godot 4.7.2 stable, Windows x64.
 
-Integration: 120 passed, 0 failed.
-UI input: 48 passed, 0 failed.
+Integration: 121 passed, 0 failed.
+UI input: 72 passed, 0 failed.
 Art resources: 14 passed, 0 failed.
 Arms and gaze: 22 passed, 0 failed.
-Total: 204 checks passed, 0 failed.
-Final Build.ps1 run completed without warnings/errors and exported Windows v1.5.4.
+Total: 229 checks passed, 0 failed.
+Build.ps1 completed and exported Bomb-the-way.exe without errors.
 
-Visual update:
-- Held previews and released bombs share whole-bomb size pulsation of +/-5.5%
-  over 1.2 seconds. Original color/brightness remain unchanged.
-- Five small pixel sparks repeatedly fly from the fuse; baked detached sparks
-  are trimmed from the source draw region. The painted bottom stays anchored
-  at the physical floor while scale changes. Held preview alpha remains 0.55.
-- Pausing freezes the released bomb's animation clock.
-- Visible player feet are trimmed and grounded art is anchored at the sole,
-  including landing squash. Collision geometry and movement physics are unchanged.
-- Native low/high captures confirm scale 0.945-1.055 with no visible floor gap.
-  After a real 450 px/s landing, the player's visual sole is at y=609.92 for
-  a floor at y=610 (0.08 px difference). Five outward-moving pixel sparks stay
-  attached to the fuse tip; the original PNG is unchanged.
-- Thin circular outlines were removed from explosions, landing, respawn,
-  bomb decoration and placement previews. Spark and smoke effects remain.
-- The original black eye and eyebrow features move toward the held bomb;
-  separate white pupil markers were removed. The native face shader is
-  included in the exported build and compiles successfully in OpenGL.
-- Graphical captures confirm moving black facial features and no expanding
-  rings during actual spawn, landing and explosion effects.
+Visual and movement update:
+- An irregular crack in the ruined building marks each challenge exit.
+  Entering the opening triggers the existing fade into the next room.
+- The world draws at 960 x 540 in the 1280 x 720 logical play area, with
+  nearest-neighbor scaling and separate full-resolution UI.
+- Small pixel dust puffs form at the feet on jump and landing. Bomb blasts
+  emit a larger plume. Landing emits dust instead of sparks.
+- Continuous masonry below platforms conceals accidental gaps in the art.
+  Small visual bevels and seeded moss, grasses and roots soften platform
+  silhouettes. Platform collisions still follow the room layout.
+- The backdrop, terrain, characters and effects share one camera shake.
+- Both procedural arms are 4 logical pixels thick from shoulder to wrist.
+  Their palms and finger marks retain separate shapes.
+- Jump speed is 425 px/s, down from 450 px/s. Default bomb push is 1010,
+  down from 1080. Room geometry is unchanged.
+
+Menu and interface:
+- Startup opens Play and Settings while gameplay is stopped.
+- Actual mouse/keyboard menu input cannot move the player or place a bomb.
+- Play starts room one without leaking its click into bomb placement.
+- Settings expose sound volume and fullscreen. Volume changes the gain of
+  actual audio voices; zero stops/silences them, raising it enables effects.
+  Volume and fullscreen choices persist to user settings.
+- Pause offers Resume, Settings and Main menu. Settings keep the same run
+  frozen; Back/Escape return to pause, Resume continues the run.
+- Returning to the main menu stops gameplay and clears bombs.
+- The M action is unbound. M cannot change sound in menus, settings, pause
+  or gameplay.
+- Playing HUD shows only three charge icons. Key/mouse hints, room count,
+  room names and numbered/tutorial world signs are not rendered.
+- The sandbox remains playable, with confetti and no final control prompt.
+  The existing R replay binding still starts a fresh run from room one.
 
 Gameplay and physics:
-- All four challenge rooms are physically traversable from spawn to exit:
+- All four challenges are physically traversable from spawn to exit:
   54 px steps, 260 px ledge, 500 px gap and a 790 px airborne bomb chain.
-- Held preview has no bomb physics and cannot detonate. Release creates a
-  physical bomb that falls, rebounds from the floor and settles on a platform.
-- Dragging another preview cannot teleport a released bomb. Existing bombs
-  can detonate while a new preview remains held.
-- Placement stays within 60 px. Terrain and occluded cursor positions resolve
-  to nearby reachable free space; release creates a bomb at the corrected point.
-  Only a neighborhood with no accessible point cancels without spending a charge.
-  Charge limits, refills, radial blasts and pause pass.
-- All five rooms fit one fixed screen. Transitions fade, replace colliders
-  without accumulating old bodies, clear bomb states and resume play.
-- Fifth room remains freely playable with confetti and unlimited reserve;
-  three-active-bomb cap remains. Pause freezes confetti and bomb physics.
-- R repeats a challenge; R in the final room starts a fresh run in room one,
-  clearing bombs, preview, run statistics and transition state.
+- Held bomb previews cannot detonate or spend charges. Release creates a
+  physical bomb that falls, rebounds and settles on the floor/platform.
+- Placement stays within 57 px; terrain and occluded cursor points resolve
+  to nearby reachable space. Released bombs cannot be dragged by a new preview.
+- Released bombs can detonate while a new preview remains held.
+- Charge limits/refills, radial blasts, room transitions and fresh-run replay
+  pass. Room replacement clears old collision bodies and all bomb state.
+- All five rooms fit one fixed screen. Pause freezes physics and confetti;
+  resumed gameplay continues the same state.
 
-Arms and eyes:
-- Short pixel arms grip opposite sides of the bomb in the same cursor update,
-  without a delayed frame. Hands remain stable while elbow motion stays small.
-- Eyes immediately follow the held bomb's direction. Release returns both hands
-  and gaze to neutral while the released bomb falls independently.
-- Hands and elbows stay finite within a short reach in all target directions.
-- Pause freezes joints, gaze and animation clock; gaze relaxes after resuming.
-  Teleport, respawn, R, room loading and final replay reset arms and eyes.
-- Existing jump and bomb traversal routes still pass after arm integration.
+Retained visual mechanics:
+- Whole-bomb size pulses by +/-5.5% over 1.2 seconds. Five small pixel sparks
+  fly from the fuse. Original colors and brightness remain unchanged.
+- Bomb bottoms and visible player soles are anchored to the surface,
+  including size pulses and landing squash; collision geometry is unchanged.
+- Thin rings are absent from explosions, landing, spawn and placement previews.
+- Original black eyes/eyebrows follow the held bomb without extra white pupils.
+- Short pixel arms grip both bomb sides immediately, return after release,
+  and reset correctly on respawn, restart, room load and replay.
+
+Native visual and release verification:
+- Windowed captures at 1280 x 720 show the cracked facade in all four
+  challenge rooms, including both raised exits. Actual jumps from the
+  nearby platform enter each exit trigger. The screen briefly fades and
+  the next room resumes play, including the sandbox after the fourth exit.
+- The Windows executable starts through OpenGL 3.3 Compatibility on NVIDIA
+  RTX 3050, runs 120 frames, and exits with code 0 without script or shader errors.
+- Executable size: 111,447,464 bytes.
+
+Earlier native visual verification (v1.7.3):
+- Windowed captures at 1280 x 720, with a 960 x 540 world texture, show both
+  arms in the idle pose and during left and right bomb grips. Both grip targets
+  remained valid. The forearms and wrists now match the upper arms in width.
+
+Earlier native visual verification (v1.7.2):
+- A 1280 x 720 window capture confirmed the 960 x 540 world raster target
+  and showed intermediate pixel detail in the first room and on the hero.
+- The effects capture rendered 13 states across spawn, idle, takeoff,
+  a 425 px/s landing, and a real bomb detonation. Takeoff and landing showed
+  small dust puffs, with no landing sparks. The bomb plume was larger and
+  spread upward while the existing blast sparks remained visible.
 
 Earlier performance probe (same scene, VSync off, NVIDIA RTX 3050):
 - CPU draw time: 3.780 ms before, 0.390 ms after, approximately 89.7% lower.
 - Draw calls: approximately 952 before, 193 after.
-These are local measurements, not a guaranteed frame rate on other devices.
+These are earlier local measurements, not a guaranteed frame rate elsewhere.
 
-Release verification:
-- Windows v1.5.4 starts directly in gameplay through OpenGL 3.3 Compatibility
-  on NVIDIA RTX 3050. The 120-frame startup smoke exits with code 0 and no
-  shader/script/resource errors. Executable size: 111,427,496 bytes.
-- Browser v1.5.4 export and Chrome WebGL2 smoke passed on 2026-11-12:
-  gzip loading, visible 1280x720 canvas, updated held/released bomb size pulse,
-  fuse sparks and grounded feet. Graphical checks show no thin rings.
-  Console errors and network failures: 0. Export/source SHA checks match,
-  including scripts/bomb.gd and scripts/player.gd.
-
-GitHub distribution:
-- Browser bundle is approximately 12.53 MB before editable source is added.
-- Largest browser file is index.wasm.gz, approximately 10.055 MB.
-- GitHub package includes editable project/ sources and keeps each file below
-  25 MB. The approximately 111 MB Windows executable is distributed separately.
-- Browser package README documents GitHub Pages deployment.
+Source distribution:
+- Editable Godot sources exclude .godot, dist, previews and local logs.
+- The Windows executable is distributed separately from the source package.
 
 Tests back up and restore user settings. Reproduce using Build.ps1 and
-the individual test commands in README.md.
+individual test commands in README.md.

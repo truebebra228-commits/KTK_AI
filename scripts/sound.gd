@@ -6,6 +6,7 @@ const SAMPLE_RATE: int = 22050
 const VOICES: int = 8
 
 var enabled: bool = true
+var volume: float = 1.0
 var _streams: Dictionary = {}
 var _players: Array[AudioStreamPlayer] = []
 var _next_voice: int = 0
@@ -14,7 +15,7 @@ var _next_voice: int = 0
 func _ready() -> void:
 	for voice: int in range(VOICES):
 		var player: AudioStreamPlayer = AudioStreamPlayer.new()
-		player.volume_db = -9.0
+		player.volume_db = -9.0 + linear_to_db(maxf(volume, 0.0001))
 		add_child(player)
 		_players.append(player)
 	_streams["jump"] = _synthesize("jump", 0.18)
@@ -27,7 +28,7 @@ func _ready() -> void:
 
 
 func play(kind: String) -> void:
-	if not enabled or not _streams.has(kind) or _players.is_empty():
+	if not enabled or volume <= 0.0 or not _streams.has(kind) or _players.is_empty():
 		return
 	var player: AudioStreamPlayer = _players[_next_voice]
 	for candidate: AudioStreamPlayer in _players:
@@ -43,6 +44,13 @@ func set_enabled(value: bool) -> void:
 	enabled = value
 	if not enabled:
 		for player: AudioStreamPlayer in _players:
+			player.stop()
+
+func set_volume(value: float) -> void:
+	volume = clampf(value, 0.0, 1.0)
+	for player: AudioStreamPlayer in _players:
+		player.volume_db = -9.0 + linear_to_db(maxf(volume, 0.0001))
+		if volume <= 0.0:
 			player.stop()
 
 

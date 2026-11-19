@@ -1,5 +1,5 @@
 extends SceneTree
-## Render live gameplay and placement states. No start or victory menus exist.
+## Render the start menu, settings and live gameplay/placement states.
 
 func _initialize() -> void:
 	call_deferred("capture")
@@ -16,6 +16,13 @@ func capture() -> void:
 	var game: Node2D = load("res://scenes/main.tscn").instantiate()
 	root.add_child(game)
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://previews"))
+	await frames(12)
+	await save_frame("menu")
+	game.open_settings()
+	await frames(4)
+	await save_frame("settings")
+	game.close_settings()
+	game.start_game()
 	await frames(12)
 	await save_frame("gameplay")
 	for index: int in range(game.room_count):

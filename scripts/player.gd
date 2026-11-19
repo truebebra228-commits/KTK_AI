@@ -8,7 +8,7 @@ signal jumped
 signal landed(impact: float)
 
 const GRAVITY: float = 1500.0
-const JUMP_SPEED: float = 450.0
+const JUMP_SPEED: float = 425.0
 const HOP_SPEED: float = 245.0
 const ART_HEIGHT: float = 60.0
 const ART_TOP: float = -39.0
@@ -137,7 +137,7 @@ func perform_jump(axis: float) -> void:
 	squash = -0.15
 	jumped.emit()
 
-func blast(origin: Vector2, radius: float = 185.0, power: float = 1080.0) -> bool:
+func blast(origin: Vector2, radius: float = 185.0, power: float = 1010.0) -> bool:
 	var offset: Vector2 = global_position - origin
 	var distance: float = offset.length()
 	if distance > radius:
@@ -175,6 +175,7 @@ func _sync_arms_transform() -> void:
 	# All artwork shares the same sole-anchored pose; the collision body is
 	# deliberately unaffected by these visual offsets and counter-rotation.
 	arms.transform = _art_transform()
+	arms.landing_compression = squash
 	arms.sync_pose()
 
 func _find_visible_bottom(image: Image, used: Rect2i) -> float:

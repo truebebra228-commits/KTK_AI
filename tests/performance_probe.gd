@@ -42,14 +42,15 @@ func next_draw() -> void:
 func benchmark(kind: String, room_index: int) -> Dictionary:
 	game.load_room(room_index)
 	var old_level: Node2D = game.level
-	game.remove_child(old_level)
+	var world: Node = old_level.get_parent()
+	world.remove_child(old_level)
 	old_level.queue_free()
 	var measured: Node2D = TimedBaseline.new() if kind == "baseline" else TimedCurrent.new()
 	measured.room_index = room_index
 	game.level = measured
 	var load_start: int = Time.get_ticks_usec()
-	game.add_child(measured)
-	game.move_child(measured, 0)
+	world.add_child(measured)
+	world.move_child(measured, 0)
 	var ready_us: int = Time.get_ticks_usec() - load_start
 	game.is_sandbox = measured.sandbox
 	game.player.reset_at(measured.checkpoints[0])
@@ -105,6 +106,7 @@ func run_probe() -> void:
 	game = load("res://scenes/main.tscn").instantiate() as Node2D
 	root.add_child(game)
 	game.sound.set_enabled(false)
+	game.start_game()
 	for warmup: int in range(40):
 		await next_draw()
 	var arguments: PackedStringArray = OS.get_cmdline_user_args()

@@ -10,12 +10,17 @@ const RoomsScript = preload("res://scripts/rooms.gd")
 const CYAN: Color = Color("b2bf8d")
 const AMBER: Color = Color("e09b48")
 const SCREEN_CENTER: Vector2 = Vector2(640, 360)
-const PLACEMENT_RADIUS: float = 60.0
+const WORLD_SIZE: Vector2i = Vector2i(1280, 720)
+const WORLD_RENDER_SIZE: Vector2i = Vector2i(960, 540)
+const RENDER_PIXEL_SIZE: Vector2 = Vector2(WORLD_SIZE) / Vector2(WORLD_RENDER_SIZE)
+const PLACEMENT_RADIUS: float = 57.0
 const BOMB_RADIUS: float = 9.0
 const MAX_BOMBS: int = 3
 const FADE_IN: float = 0.22
 const FADE_HOLD: float = 0.08
 const FADE_OUT: float = 0.25
+const SETTINGS_PATH: String = "user://record.cfg"
+const LEGACY_SETTINGS_PATH: String = "Godot/app_userdata/ИМПУЛЬС — Пепельный город/record.cfg"
 
 var level: Node2D
 var player: CharacterBody2D
@@ -26,7 +31,9 @@ var camera: Camera2D
 var bombs: Array[Node2D] = []
 var charges: int = 3
 var checkpoint: int = 0
-var mode: String = "playing"
+var mode: String = "menu"
+var settings_return_mode: String = "menu"
+var fullscreen: bool = false
 var elapsed: float = 0.0
 var deaths: int = 0
 var blasts: int = 0
@@ -50,20 +57,22 @@ var placement_cursor_position: Vector2 = Vector2.ZERO
 var placement_valid: bool = false
 var placement_preview: Node2D
 var preview_texture: Texture2D
+var _world_viewport: SubViewport
 var _placement_query: PhysicsShapeQueryParameters2D
 var _placement_ray: PhysicsRayQueryParameters2D
 
 func _ready() -> void:
 	_bind_inputs()
 	room_count = RoomsScript.definitions().size()
+	_build_world_viewport()
 	level = LevelScript.new()
-	add_child(level)
+	_world_viewport.add_child(level)
 	effects = EffectsScript.new()
-	add_child(effects)
+	_world_viewport.add_child(effects)
 	player = PlayerScript.new()
-	add_child(player)
+	_world_viewport.add_child(player)
 	player.reset_at(level.checkpoints[0])
-	player.jumped.connect(func() -> void: sound.play("jump"))
+	player.jumped.connect(_on_jump)
 	player.landed.connect(_on_land)
 	camera = Camera2D.new()
 	camera.position = SCREEN_CENTER
@@ -72,7 +81,7 @@ func _ready() -> void:
 	camera.limit_right = 1280
 	camera.limit_top = 0
 	camera.limit_bottom = 720
-	add_child(camera)
+	_world_viewport.add_child(camera)
 	sound = SoundScript.new()
 	add_child(sound)
 	preview_texture = BombScript.visual_texture()
@@ -89,7 +98,7 @@ func _ready() -> void:
 	placement_preview.name = "BombPlacementPreview"
 	placement_preview.z_index = 20
 	placement_preview.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	add_child(placement_preview)
+	_world_viewport.add_child(placement_preview)
 	placement_preview.draw.connect(_draw_placement)
 	var canvas: CanvasLayer = CanvasLayer.new()
 	canvas.layer = 10
@@ -97,11 +106,40 @@ func _ready() -> void:
 	hud = HudScript.new()
 	hud.game = self
 	canvas.add_child(hud)
-	var save: ConfigFile = ConfigFile.new()
-	if save.load("user://record.cfg") == OK:
-		sound.set_enabled(bool(save.get_value("settings", "audio", true)))
+	var save: ConfigFile = _read_settings()
+	var legacy_audio: bool = bool(save.get_value("settings", "audio", true))
+	sound.set_volume(float(save.get_value("settings", "volume", 1.0 if legacy_audio else 0.0)))
+	sound.set_enabled(sound.volume > 0.0)
+	if bool(save.get_value("settings", "fullscreen", false)):
+		_apply_fullscreen(true)
 	level.set_checkpoint_active(0)
-	_set_simulation(true)
+	_set_simulation(false)
+	_refresh_ui()
+
+func _build_world_viewport() -> void:
+	# Keep a softer pixel grid while the room layout and physics use the full
+	# logical size. Menus and the HUD draw separately at window resolution.
+	_world_viewport = SubViewport.new()
+	_world_viewport.name = "WorldViewport"
+	_world_viewport.size = WORLD_RENDER_SIZE
+	_world_viewport.size_2d_override = WORLD_SIZE
+	_world_viewport.size_2d_override_stretch = true
+	_world_viewport.world_2d = World2D.new()
+	_world_viewport.disable_3d = true
+	_world_viewport.gui_disable_input = true
+	add_child(_world_viewport)
+	var picture: Sprite2D = Sprite2D.new()
+	picture.name = "WorldPicture"
+	picture.centered = false
+	picture.texture = _world_viewport.get_texture()
+	picture.scale = RENDER_PIXEL_SIZE
+	picture.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	add_child(picture)
+
+func _cursor_world() -> Vector2:
+	# Window input already accounts for fullscreen scaling and letterboxing.
+	# Undo the world's camera transform as well when the screen shakes.
+	return _world_viewport.canvas_transform.affine_inverse() * get_global_mouse_position()
 
 func _bind_inputs() -> void:
 	_key("left", [KEY_A, KEY_LEFT])
@@ -111,7 +149,8 @@ func _bind_inputs() -> void:
 	_key("brake", [KEY_S, KEY_DOWN])
 	_key("restart", [KEY_R])
 	_key("pause", [KEY_ESCAPE])
-	_key("mute", [KEY_M])
+	if InputMap.has_action("mute"):
+		InputMap.erase_action("mute")
 	for pair: Array in [["place_mouse", MOUSE_BUTTON_LEFT], ["detonate", MOUSE_BUTTON_RIGHT]]:
 		if not InputMap.has_action(pair[0]):
 			InputMap.add_action(pair[0])
@@ -128,15 +167,18 @@ func _key(action: String, codes: Array) -> void:
 		InputMap.action_add_event(action, key)
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("mute"):
-		sound.set_enabled(not sound.enabled)
-		_save_settings()
+	if event.is_echo():
+		return
 	if mode == "transition":
 		return
 	if event.is_action_pressed("pause"):
-		cancel_placement()
-		mode = "playing" if mode == "paused" else "paused"
-		_set_simulation(mode == "playing")
+		match mode:
+			"settings":
+				close_settings()
+			"playing":
+				pause_game()
+			"paused":
+				resume_game()
 		return
 	if mode != "playing":
 		return
@@ -147,13 +189,87 @@ func _unhandled_input(event: InputEvent) -> void:
 			respawn(false)
 		return
 	if event is InputEventMouseMotion and placing_bomb:
-		update_placement(get_global_mouse_position())
+		update_placement(_cursor_world())
 	if event.is_action_pressed("place_mouse"):
 		begin_placement()
 	elif event.is_action_released("place_mouse"):
 		commit_placement()
 	if event.is_action_pressed("detonate"):
 		detonate_bombs()
+
+func _refresh_ui() -> void:
+	if is_instance_valid(player):
+		player.visible = mode != "menu" and not (mode == "settings" and settings_return_mode == "menu")
+	if is_instance_valid(hud):
+		hud.refresh_menu()
+
+func start_game() -> void:
+	if mode == "menu":
+		restart_run()
+
+func pause_game() -> void:
+	if mode != "playing":
+		return
+	cancel_placement()
+	mode = "paused"
+	_set_simulation(false)
+	_refresh_ui()
+
+func resume_game() -> void:
+	if mode != "paused":
+		return
+	mode = "playing"
+	_set_simulation(true)
+	_refresh_ui()
+
+func open_settings() -> void:
+	if mode != "menu" and mode != "paused":
+		return
+	settings_return_mode = mode
+	cancel_placement()
+	mode = "settings"
+	_set_simulation(false)
+	_refresh_ui()
+
+func close_settings() -> void:
+	if mode != "settings":
+		return
+	mode = settings_return_mode
+	_refresh_ui()
+
+func return_to_menu() -> void:
+	mode = "menu"
+	settings_return_mode = "menu"
+	elapsed = 0.0
+	deaths = 0
+	blasts = 0
+	transition_alpha = 0.0
+	transition_elapsed = 0.0
+	transition_loaded = false
+	next_room = -1
+	toast = ""
+	toast_time = 0.0
+	load_room(0)
+	player.facing = 1.0
+	player.squash = 0.0
+	_set_simulation(false)
+	_refresh_ui()
+
+func set_sound_volume(value: float) -> void:
+	sound.set_volume(value)
+	sound.set_enabled(sound.volume > 0.0)
+	_save_settings()
+	_refresh_ui()
+
+func _apply_fullscreen(value: bool) -> void:
+	fullscreen = value
+	if DisplayServer.get_name() != "headless":
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if value else DisplayServer.WINDOW_MODE_WINDOWED)
+
+func set_fullscreen(value: bool) -> void:
+	_apply_fullscreen(value)
+	_save_settings()
+	_refresh_ui()
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and is_node_ready():
@@ -180,7 +296,7 @@ func _process(delta: float) -> void:
 		next_room = -1
 		mode = "playing"
 		_set_simulation(true)
-		notify("Путь пройден! Здесь можно играть сколько угодно." if is_sandbox else "Комната %d / %d — %s" % [room_index + 1, challenge_count, level.zone_names[room_index]])
+		_refresh_ui()
 
 func advance_room() -> void:
 	if mode != "playing" or is_sandbox or room_index + 1 >= room_count:
@@ -196,7 +312,7 @@ func advance_room() -> void:
 	sound.play("checkpoint")
 
 func restart_run() -> void:
-	# Final-room replay starts a fresh run while retaining the audio preference.
+	# Play and final-room replay start a fresh run, retaining preferences.
 	mode = "playing"
 	elapsed = 0.0
 	deaths = 0
@@ -213,19 +329,20 @@ func restart_run() -> void:
 	player.facing = 1.0
 	player.squash = 0.0
 	_set_simulation(true)
+	_refresh_ui()
 
 func load_room(index: int) -> void:
 	_clear_bombs()
 	if is_instance_valid(level):
-		remove_child(level)
+		_world_viewport.remove_child(level)
 		level.queue_free()
 	room_index = clampi(index, 0, room_count - 1)
 	zone = room_index
 	checkpoint = 0
 	level = LevelScript.new()
 	level.room_index = room_index
-	add_child(level)
-	move_child(level, 0)
+	_world_viewport.add_child(level)
+	_world_viewport.move_child(level, 0)
 	is_sandbox = level.sandbox
 	level.set_checkpoint_active(0)
 	level.set_paused(mode != "playing")
@@ -248,7 +365,7 @@ func _clear_bombs() -> void:
 		if is_instance_valid(bomb):
 			bomb.set_process(false)
 			bomb.set_physics_process(false)
-			remove_child(bomb)
+			_world_viewport.remove_child(bomb)
 			bomb.queue_free()
 	bombs.clear()
 
@@ -263,12 +380,14 @@ func _set_simulation(active: bool) -> void:
 	level.set_paused(not active)
 
 func _physics_process(delta: float) -> void:
-	shake = maxf(0.0, shake - delta * 28.0)
-	camera.offset = Vector2(randf_range(-shake, shake), randf_range(-shake, shake))
-	toast_time = maxf(0.0, toast_time - delta)
-	plant_cooldown = maxf(0.0, plant_cooldown - delta)
 	if mode != "playing":
 		return
+	shake = maxf(0.0, shake - delta * 28.0)
+	# One offset for the city, ground, actors and particles. A whole-pixel
+	# displacement keeps the silhouettes sharp during the shake.
+	camera.offset = Vector2(randf_range(-shake, shake), randf_range(-shake, shake)).snapped(RENDER_PIXEL_SIZE)
+	toast_time = maxf(0.0, toast_time - delta)
+	plant_cooldown = maxf(0.0, plant_cooldown - delta)
 	elapsed += delta
 	if placing_bomb:
 		update_placement(placement_cursor_position)
@@ -298,7 +417,7 @@ func begin_placement() -> bool:
 			sound.play("deny")
 		return false
 	placing_bomb = true
-	update_placement(get_global_mouse_position())
+	update_placement(_cursor_world())
 	return true
 
 func update_placement(cursor_world: Vector2) -> void:
@@ -319,7 +438,7 @@ func _resolve_placement(desired: Vector2) -> Vector2:
 	if _is_placeable(desired):
 		return desired
 	var origin: Vector2 = player.global_position
-	var space: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state
+	var space: PhysicsDirectSpaceState2D = _world_viewport.world_2d.direct_space_state
 	_placement_ray.from = origin
 	_placement_ray.to = desired
 	var hit: Dictionary = space.intersect_ray(_placement_ray)
@@ -352,7 +471,7 @@ func _is_placeable(point: Vector2) -> bool:
 		return false
 	_placement_query.transform = Transform2D(0.0, point)
 	_placement_query.motion = Vector2.ZERO
-	var space: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state
+	var space: PhysicsDirectSpaceState2D = _world_viewport.world_2d.direct_space_state
 	if not space.intersect_shape(_placement_query, 1).is_empty():
 		return false
 	_placement_ray.from = player.global_position
@@ -377,7 +496,7 @@ func commit_placement() -> bool:
 	var bomb: Node2D = BombScript.new()
 	bomb.position = point
 	bomb.serial = bombs.size() + 1
-	add_child(bomb)
+	_world_viewport.add_child(bomb)
 	bombs.append(bomb)
 	charges = 3 if is_sandbox else charges - 1
 	plant_cooldown = 0.14
@@ -417,6 +536,11 @@ func detonate_bombs() -> int:
 		if player.blast(bomb.global_position):
 			hits += 1
 		effects.burst(bomb.global_position, AMBER, 42, 460.0)
+		var grounded: bool = (bomb as CharacterBody2D).is_on_floor()
+		var dust_origin: Vector2 = bomb.global_position
+		if grounded:
+			dust_origin.y += BombScript.CONTACT_Y
+		effects.dust(dust_origin, 2.55, grounded)
 		bomb.queue_free()
 	bombs.clear()
 	blasts += 1
@@ -424,10 +548,16 @@ func detonate_bombs() -> int:
 	sound.play("blast")
 	return hits
 
+func _on_jump() -> void:
+	effects.dust(player.get_visual_sole_world_position(), 0.85, player.is_on_floor())
+	sound.play("jump")
+
 func _on_land(impact: float) -> void:
 	charges = 3
+	if impact > 90.0:
+		var strength: float = lerpf(0.75, 1.4, clampf(impact / 600.0, 0.0, 1.0))
+		effects.dust(player.get_visual_sole_world_position(), strength)
 	if impact > 300.0:
-		effects.burst(player.position + Vector2(0, 20), Color("6e9caa"), 9, 120.0)
 		shake = maxf(shake, minf(impact / 260.0, 4.0))
 
 func respawn(count_death: bool = true) -> void:
@@ -442,13 +572,20 @@ func respawn(count_death: bool = true) -> void:
 	camera.position = SCREEN_CENTER
 	camera.offset = Vector2.ZERO
 	camera.reset_smoothing()
-	notify("Свободная комната — прыгай и экспериментируй." if is_sandbox else "Комната %d: новая попытка. R — начать её заново." % (room_index + 1))
+
+func _read_settings() -> ConfigFile:
+	var save: ConfigFile = ConfigFile.new()
+	if save.load(SETTINGS_PATH) == ERR_FILE_NOT_FOUND:
+		# With the new title Godot uses a different folder for user://.
+		save.load(OS.get_data_dir().path_join(LEGACY_SETTINGS_PATH))
+	return save
 
 func _save_settings() -> void:
-	var save: ConfigFile = ConfigFile.new()
-	save.load("user://record.cfg")
-	save.set_value("settings", "audio", sound.enabled)
-	save.save("user://record.cfg")
+	var save: ConfigFile = _read_settings()
+	save.set_value("settings", "audio", sound.volume > 0.0)
+	save.set_value("settings", "volume", sound.volume)
+	save.set_value("settings", "fullscreen", fullscreen)
+	save.save(SETTINGS_PATH)
 
 func notify(message: String) -> void:
 	toast = message

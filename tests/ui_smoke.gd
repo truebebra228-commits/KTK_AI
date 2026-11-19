@@ -9,6 +9,7 @@ var record_existed: bool = false
 var record_backup: PackedByteArray = PackedByteArray()
 var held_buttons: int = 0
 var pointer: Vector2 = Vector2.ZERO
+var window_mode_backup: DisplayServer.WindowMode = DisplayServer.WINDOW_MODE_WINDOWED
 
 func _initialize() -> void:
 	call_deferred("run_checks")
@@ -71,6 +72,112 @@ func begin_drag(offset: Vector2 = Vector2(40, -30)) -> void:
 func release_drag() -> void:
 	await mouse_button(MOUSE_BUTTON_LEFT, false)
 
+func click_control(control_name: String) -> void:
+	var control: Control = game.hud.find_child(control_name, true, false) as Control
+	if control == null:
+		check(false, "Menu control exists: " + control_name)
+		return
+	await mouse_move(control.get_global_rect().get_center())
+	await mouse_button(MOUSE_BUTTON_LEFT, true)
+	await mouse_button(MOUSE_BUTTON_LEFT, false)
+	await frames(3)
+
+func start_menu_checks() -> void:
+	check(game.mode == "menu" and not game.player.enabled, "Game starts in a menu with simulation stopped")
+	check(game.room_index == 0 and not game.is_sandbox, "Run is staged in the first challenge room")
+	check(not InputMap.has_action("mute"), "The M mute action is not bound")
+	# Space legitimately activates a focused menu button. Clear UI focus here
+	# to exercise the gameplay jump binding; keyboard button activation is
+	# verified separately below.
+	game.hud.play_button.release_focus()
+	var frozen: Vector2 = game.player.position
+	var volume_before: float = game.sound.volume
+	var audio_before: bool = game.sound.enabled
+	await tap(KEY_SPACE)
+	await tap(KEY_R)
+	await tap(KEY_F)
+	await tap(KEY_ESCAPE)
+	await tap(KEY_M)
+	await mouse_move(Vector2(60, 600))
+	await mouse_button(MOUSE_BUTTON_LEFT, true)
+	await mouse_button(MOUSE_BUTTON_LEFT, false)
+	check(game.mode == "menu" and game.player.position.is_equal_approx(frozen), "Gameplay keys and background clicks cannot move the player in the menu")
+	check(game.bombs.is_empty() and not game.placing_bomb and game.charges == 3, "Menu clicks cannot place or spend bombs")
+	check(game.sound.enabled == audio_before and is_equal_approx(game.sound.volume, volume_before), "M does not change sound in the main menu")
+
+	await click_control("Settings")
+	check(game.mode == "settings" and not game.player.enabled, "The Settings button opens settings while gameplay stays stopped")
+	var slider: HSlider = game.hud.find_child("VolumeSlider", true, false) as HSlider
+	if slider != null:
+		var rect: Rect2 = slider.get_global_rect()
+		await mouse_move(rect.position + Vector2(rect.size.x * 0.25, rect.size.y * 0.5))
+		await mouse_button(MOUSE_BUTTON_LEFT, true)
+		await mouse_button(MOUSE_BUTTON_LEFT, false)
+		check(game.sound.volume > 0.0 and game.sound.volume < 0.6, "Dragging the settings slider changes actual effect volume")
+		var voices_dimmed: bool = true
+		var voice_count: int = 0
+		for child: Node in game.sound.get_children():
+			if child is AudioStreamPlayer:
+				voice_count += 1
+				voices_dimmed = voices_dimmed and child.volume_db < -10.0 and child.volume_db > -70.0
+		check(game.sound.enabled and voice_count > 0 and voices_dimmed, "The slider lowers gain on the actual audio voices")
+		game.sound.play("blast")
+		await mouse_move(rect.position + Vector2(1, rect.size.y * 0.5))
+		await mouse_button(MOUSE_BUTTON_LEFT, true)
+		await mouse_button(MOUSE_BUTTON_LEFT, false)
+		var voices_stopped: bool = true
+		for child: Node in game.sound.get_children():
+			if child is AudioStreamPlayer:
+				voices_stopped = voices_stopped and not child.playing and child.volume_db < -80.0
+		check(is_zero_approx(game.sound.volume) and not game.sound.enabled and voices_stopped, "Zero volume stops and silences all active audio voices")
+		await mouse_move(rect.position + Vector2(rect.size.x * 0.25, rect.size.y * 0.5))
+		await mouse_button(MOUSE_BUTTON_LEFT, true)
+		await mouse_button(MOUSE_BUTTON_LEFT, false)
+		check(game.sound.enabled and game.sound.volume > 0.0, "Raising the slider enables effects again")
+	else:
+		check(false, "Settings volume slider exists")
+	var saved: ConfigFile = ConfigFile.new()
+	check(saved.load("user://record.cfg") == OK and is_equal_approx(float(saved.get_value("settings", "volume", -1.0)), game.sound.volume), "The chosen volume is persisted to user settings")
+	var fullscreen_before: bool = game.fullscreen
+	await click_control("FullscreenToggle")
+	check(game.fullscreen != fullscreen_before, "The fullscreen control changes the requested display mode")
+	saved.load("user://record.cfg")
+	check(bool(saved.get_value("settings", "fullscreen", fullscreen_before)) == game.fullscreen, "The fullscreen choice is persisted")
+	await click_control("FullscreenToggle")
+	var settings_volume: float = game.sound.volume
+	await tap(KEY_M)
+	check(is_equal_approx(game.sound.volume, settings_volume), "M does not alter sound in settings")
+	await click_control("Back")
+	check(game.mode == "menu" and not game.player.enabled, "Back returns from settings to the start menu")
+
+	await click_control("Play")
+	check(game.mode == "playing" and game.player.enabled and game.room_index == 0, "The Play button starts a live run")
+	check(not game.placing_bomb and game.bombs.is_empty() and game.charges == 3, "Clicking Play cannot leak a click into bomb placement")
+	await frames(20)
+	await tap(KEY_ESCAPE)
+	check(game.mode == "paused" and not game.player.enabled, "Escape opens the pause menu")
+	var paused_volume: float = game.sound.volume
+	var paused_audio: bool = game.sound.enabled
+	await tap(KEY_M)
+	check(is_equal_approx(game.sound.volume, paused_volume) and game.sound.enabled == paused_audio, "M does not change sound while paused")
+	var pause_point: Vector2 = game.player.position
+	await click_control("PauseSettings")
+	check(game.mode == "settings" and not game.player.enabled, "Pause settings keep the run frozen")
+	await tap(KEY_ESCAPE)
+	check(game.mode == "paused" and game.player.position.is_equal_approx(pause_point), "Escape returns from settings to the same paused run")
+	await click_control("Resume")
+	check(game.mode == "playing" and game.player.enabled and not game.placing_bomb, "Resume continues without creating a placement ghost")
+	await tap(KEY_ESCAPE)
+	await click_control("MainMenu")
+	check(game.mode == "menu" and not game.player.enabled and game.bombs.is_empty(), "Main Menu leaves gameplay stopped and clears bombs")
+	var play: Control = game.hud.find_child("Play", true, false) as Control
+	if play != null:
+		play.grab_focus()
+	await tap(KEY_ENTER)
+	check(game.mode == "playing" and game.room_index == 0 and game.player.enabled, "A focused Play button also starts through keyboard input")
+	check(not game.placing_bomb and game.bombs.is_empty(), "Keyboard menu activation does not create a bomb")
+	await frames(20)
+
 func place_at_free_point() -> void:
 	await begin_drag()
 	await mouse_move(game.player.position + Vector2(45, -25))
@@ -91,11 +198,11 @@ func run_checks() -> void:
 	record_existed = FileAccess.file_exists("user://record.cfg")
 	if record_existed:
 		record_backup = FileAccess.get_file_as_bytes("user://record.cfg")
+	window_mode_backup = DisplayServer.window_get_mode()
 	game = load("res://scenes/main.tscn").instantiate() as Node2D
 	root.add_child(game)
 	await frames(20)
-	check(game.mode == "playing" and game.player.enabled, "Game starts playing immediately without a title menu")
-	check(game.room_index == 0 and not game.is_sandbox, "Run starts in the first challenge room")
+	await start_menu_checks()
 	await tap(KEY_E)
 	check(game.bombs.is_empty() and not game.placing_bomb and game.charges == 3, "E does not create a bomb or placement ghost")
 
@@ -225,7 +332,7 @@ func run_checks() -> void:
 	var final_point: Vector2 = game.player.position
 	var confetti_clock: float = game.level._clock
 	await frames(20)
-	check(game.mode == "paused" and game.player.position.is_equal_approx(final_point), "Sandbox pauses without opening a menu")
+	check(game.mode == "paused" and game.player.position.is_equal_approx(final_point), "Sandbox pauses in the pause menu")
 	check(is_equal_approx(game.level._clock, confetti_clock), "Pause freezes the sandbox confetti animation")
 	await tap(KEY_ESCAPE)
 	await frames(5)
@@ -240,8 +347,9 @@ func run_checks() -> void:
 	check(game.room_index == 0 and not game.is_sandbox and not game.level.sandbox and game.mode == "playing" and game.player.enabled, "R in the sandbox starts a new playable run in room one")
 	check(game.bombs.is_empty() and not game.placing_bomb and game.charges == 3 and game.elapsed < 1.0 and game.deaths == 0 and game.blasts == 0 and game.transition_alpha == 0.0 and game.next_room == -1, "Replay through the actual R key clears bombs, held preview, run statistics and transition state")
 	var audio_before: bool = game.sound.enabled
+	var volume_before: float = game.sound.volume
 	await tap(KEY_M)
-	check(game.sound.enabled != audio_before, "M toggles sound")
+	check(game.sound.enabled == audio_before and is_equal_approx(game.sound.volume, volume_before), "M no longer changes sound during gameplay")
 	# Mouse coordinates stay correct with the stretched 960x540 window.
 	root.size = Vector2i(960, 540)
 	await frames(3)
@@ -257,6 +365,8 @@ func run_checks() -> void:
 	OS.delay_msec(100)
 	game.queue_free()
 	await frames(3)
+	if DisplayServer.get_name() != "headless":
+		DisplayServer.window_set_mode(window_mode_backup)
 	if record_existed:
 		var record: FileAccess = FileAccess.open("user://record.cfg", FileAccess.WRITE)
 		record.store_buffer(record_backup)

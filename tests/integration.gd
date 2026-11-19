@@ -32,7 +32,10 @@ func _run() -> void:
 		game.queue_free()
 		quit(1)
 		return
-	_expect(game.mode == "playing" and game.player.enabled, "the game starts playing immediately without a start menu")
+	_expect(game.mode == "menu" and not game.player.enabled, "the game starts in a menu with simulation stopped")
+	game.start_game()
+	await _frames(8)
+	_expect(game.mode == "playing" and game.player.enabled, "Play starts a live run in the first room")
 	_expect(game.room_count == 5 and game.challenge_count == 4 and game.room_index == 0 and not game.is_sandbox, "four challenge rooms lead to a fifth sandbox")
 	_expect(not _has_property(game, "collected") and not _has_property(game.level, "collectibles"), "gameplay and level no longer expose collectible progress")
 	game.sound.set_enabled(false)
@@ -133,7 +136,8 @@ func _drag_placement() -> void:
 	_expect(game.begin_placement(), "beginning a drag creates a placement preview")
 	game.update_placement(game.player.position + Vector2(500, -150))
 	_expect(game.placing_bomb and game.bombs.is_empty() and game.charges == initial_charges, "holding the preview creates no active bomb and spends no charge")
-	_expect(game.placement_position.distance_to(game.player.position) <= game.PLACEMENT_RADIUS + 0.01 and is_equal_approx(game.PLACEMENT_RADIUS, 60.0), "drag position is clamped within the new 60 pixel radius")
+	var reach: float = game.placement_position.distance_to(game.player.position)
+	_expect(game.placement_valid and absf(reach - 57.0) < 0.05, "an unobstructed drag clamps at the 57 pixel radius")
 	var old_preview: Vector2 = game.placement_position
 	game.player.position.x -= 100.0
 	game.update_placement(old_preview)
@@ -182,7 +186,7 @@ func _drag_placement() -> void:
 	game.update_placement(Vector2(590, 330))
 	_expect(game.placement_valid and game.placement_position.x <= 531.0 and game.placement_position.distance_to(game.player.position) <= game.PLACEMENT_RADIUS + 0.1 and game.commit_placement(), "an occluded corner target resolves to an accessible free point within reach")
 	await _stage(1)
-	# An embedded-player fixture makes the entire 60 px neighborhood solid.
+	# An embedded-player fixture makes the entire placement neighborhood solid.
 	# It tests the no-solution fallback separately from playable traversal.
 	game.player.reset_at(Vector2(900, 500))
 	before_invalid = game.charges

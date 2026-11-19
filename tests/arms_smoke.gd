@@ -31,6 +31,8 @@ func run_checks() -> void:
 		quit(1)
 		return
 	game.sound.set_enabled(false)
+	game.start_game()
+	await frames(12)
 	await reach_and_release()
 	await directional_targets()
 	await pause_pose()

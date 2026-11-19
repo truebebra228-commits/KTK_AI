@@ -29,6 +29,7 @@ func capture() -> void:
 	root.add_child(game)
 	await process_frame
 	game.sound.set_enabled(false)
+	game.start_game()
 	game.load_room(4)
 	game.toast_time = 0.0
 	game.player.facing = 1.0
